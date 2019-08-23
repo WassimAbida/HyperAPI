@@ -19,10 +19,13 @@ class AlgoTypes:
     XGBREGRESSOR = 'XGBRegressor'
     LASSO = 'Lasso'
     PERCEPTRON = 'Perceptron'
+    FORECASTXGBREGRESSOR = 'GradientBoostingRegressor'
+    TIMESERIESFORECASTER= 'TimeSeriesForecaster'
+
     LIST = [HYPERCUBE, LOGISTICREGRESSION, DECISIONTREE, RANDOMFOREST,
             GRADIENTBOOSTING, GRADIENTBOOSTINGREGRESSOR, XGBREGRESSOR,
-            LASSO, PERCEPTRON]
-    REGRESSORLIST = [GRADIENTBOOSTINGREGRESSOR, XGBREGRESSOR, LASSO]
+            LASSO, PERCEPTRON, FORECASTXGBREGRESSOR, TIMESERIESFORECASTER]
+    REGRESSORLIST = [GRADIENTBOOSTINGREGRESSOR, XGBREGRESSOR, LASSO, FORECASTXGBREGRESSOR, TIMESERIESFORECASTER]
 
 
 class Curves:
@@ -781,6 +784,138 @@ class ModelFactory:
             'discretizations': discretizations,
         }
         return self.__create_skModel(dataset, target, params)
+
+
+    @Helper.try_catch
+    def create_TimeSeriesForecaster(self, dataset, name, target, target_name, freq='1T', seasonalities_choice=[], targets_to_enrich='', targets_history=[],
+                                    n_lags_max=0, lags_to_include=[], one_hot_encode_seasons=False, remove_seasons =False, dropna=False,
+                                    scaler_target='', scaler_X_var='', grid_search=False, rolling_enrich_features=[], test_ratio=0.3, regressor={},
+                                    enable_custom_discretizations=True, nbMaxModality=50, nbMinObservation=10, replaceMissingValues='Median'):
+        """
+        Create a eXtreme Gradient Boosting (XGBoost) regressor
+
+        Args:
+            dataset (Dataset): Dataset the model is fitted on
+            name (str): Name of the new model
+            target (Target): Target used to generate the model
+            target_name (str): Name of the target
+            freq (str): Frequency of the time series
+            seasonalities_choice (list): possible seasonalities to consider
+            targets_history (list): variables to consider when adding lags
+            n_lags_max (int): maximum lags to include
+            lags_to_include (list): specific lags to include
+            one_hot_encode_seasons (bool): One hot encode the seasonalities [categorical features]
+            remove_seasons (bool): remove seasonalities for features
+            dropna (bool): remove NaNs values
+            scaler_target (str): name of scaler for time series
+            scaler_X_var (str): name of scaler for X values (features)
+            grid_search (bool): apply grid search for XGboost Regressor
+            rolling_enrich_features (list): features to include additional rolling statistics
+            test_ratio (float): test size 
+            regressor (dict): defines the regressor algorithm to use and its hyperparameters
+
+            example:
+
+                "regressor":{
+                    "model_name":"lstm", "params":{"n_units": 100, "activation": "tanh",
+                    "dropout": 0.4, "return_sequences": true,
+                    "loss": "mae", "metrics": "mse", "optimizer_name": "sgd",
+                    "optimizer_params": {"lr": 0.01, "decay": 1e-6, "momentum": 0.9, "nesterov": true},
+                    "callbacks": {"monitor": "val_loss", "mode": "min", "patience": 5},
+                    "epochs": 100, "batch_size": 128, "validation_split": 0.3,
+                    "shuffle": false, "verbose": 0}
+                                    }
+
+            enable_custom_discretizations (boolean): when ticked use the custom discretization(s) link to the selected dataset. Default is True
+            nbMaxModality (int): Maximum number of modalities per variable. Default is 50
+            nbMinObservation (int): Modalities with a number of observations lower will be ignored. Default is 10
+            replaceMissingValues (str): Method to replace missing values. Available methods are 'Median', 'Mean' and 'Delete'. Default is 'Median'
+            
+        Returns:
+            the created model
+        """
+        # case empty regressor entry
+        if regressor == {}:
+            regressor = {
+                    "model_name":"lstm", "params":{"n_units": 100, "activation": "tanh",
+                    "dropout": 0.4, "return_sequences": True,
+                    "loss": "mae", "metrics": "mse", "optimizer_name": "sgd",
+                    "optimizer_params": {"lr": 0.01, "decay": 1e-6, "momentum": 0.9, "nesterov": True},
+                    "callbacks": {"monitor": "val_loss", "mode": "min", "patience": 5},
+                    "epochs": 100, "batch_size": 128, "validation_split": 0.3,
+                    "shuffle": False, "verbose": 0}
+                    }
+
+        hyperParameters = { 
+                "target_name": target_name,
+                "freq": freq,
+                "seasonalities_choice": seasonalities_choice,
+                "targets_to_enrich": targets_to_enrich,
+                "targets_history": targets_history,
+                "n_lags_max": n_lags_max,
+                "lags_to_include": lags_to_include,
+                "one_hot_encode_seasons": one_hot_encode_seasons,
+                "remove_seasons": remove_seasons,
+                "dropna": dropna,
+                "scaler_target": scaler_target,
+                "scaler_X_var": scaler_X_var,
+                "grid_search": grid_search,
+                "rolling_enrich_features": rolling_enrich_features,
+                "test_ratio": test_ratio,
+                "regressor": regressor
+         }
+        discretizations = {}
+        if enable_custom_discretizations is True:
+            discretizations = dataset._discretizations
+        params = {
+            'nbMaxModality': nbMaxModality,
+            'nbMinObservation': nbMinObservation,
+            'replaceMissingValues': replaceMissingValues,
+            'paramsSk': dumps(hyperParameters),
+            'algoType': AlgoTypes.XGBREGRESSOR,
+            'modelName': name,
+            'enable_custom_discretizations': enable_custom_discretizations,
+            'discretizations': discretizations,
+        }
+        return self.__create_skModel(dataset, target, params)
+
+    @Helper.try_catch
+    def create_XGB_time_series_forecaster(self, dataset, name, target, n_estimators=100, maxdepth=3, split_ratio=0.7, enable_custom_discretizations=True,
+                            nbMaxModality=50, nbMinObservation=10, replaceMissingValues='Median'):
+
+        """
+        Create a eXtreme Gradient Boosting (XGBoost) regressor
+
+        Args:
+            dataset (Dataset): Dataset the model is fitted on
+            name (str): Name of the new model
+            target (Target): Target used to generate the model
+            n_estimators (int): The number  of boosting stages to perform. Default is 100
+            max_depth (int): The maximum depth of the individual regression estimators. Default is 3
+            split_ratio (float): the first step in the model generation is the random split of the original dataset into a learning (or train) dataset
+                representing by default 70% of the original dataset, and a validation (or test) dataset containing the remaining 30%. Default is 0.7
+            enable_custom_discretizations (boolean): when ticked use the custom discretization(s) link to the selected dataset. Default is True
+            nbMaxModality (int): Maximum number of modalities per variable. Default is 50
+            nbMinObservation (int): Modalities with a number of observations lower will be ignored. Default is 10
+        Returns:
+            the created model
+        """
+        hyperParameters = {'n_estimators': n_estimators, 'learning_rate': 0.1, 'max_depth': maxdepth}
+        discretizations = {}
+        if enable_custom_discretizations is True:
+            discretizations = dataset._discretizations
+        params = {
+            'nbMaxModality': nbMaxModality,
+            'nbMinObservation': nbMinObservation,
+            'replaceMissingValues': replaceMissingValues,
+            'paramsSk': dumps(hyperParameters),
+            'algoType': AlgoTypes.FORECASTXGBREGRESSOR,
+            'modelName': name,
+            'enable_custom_discretizations': enable_custom_discretizations,
+            'discretizations': discretizations,
+        }
+        return self.__create_skModel(dataset, target, params) 
+
 
 class Model(Base):
     """
