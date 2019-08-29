@@ -19,13 +19,12 @@ class AlgoTypes:
     XGBREGRESSOR = 'XGBRegressor'
     LASSO = 'Lasso'
     PERCEPTRON = 'Perceptron'
-    FORECASTXGBREGRESSOR = 'GradientBoostingRegressor'
-    TIMESERIESFORECASTER= 'TimeSeriesForecaster'
+    TIMESERIESFORECASTER= 'GradientBoostingRegressor' # TimeSeriesForecaster
 
     LIST = [HYPERCUBE, LOGISTICREGRESSION, DECISIONTREE, RANDOMFOREST,
             GRADIENTBOOSTING, GRADIENTBOOSTINGREGRESSOR, XGBREGRESSOR,
-            LASSO, PERCEPTRON, FORECASTXGBREGRESSOR, TIMESERIESFORECASTER]
-    REGRESSORLIST = [GRADIENTBOOSTINGREGRESSOR, XGBREGRESSOR, LASSO, FORECASTXGBREGRESSOR, TIMESERIESFORECASTER]
+            LASSO, PERCEPTRON, TIMESERIESFORECASTER]
+    REGRESSORLIST = [GRADIENTBOOSTINGREGRESSOR, XGBREGRESSOR, LASSO, TIMESERIESFORECASTER]
 
 
 class Curves:
@@ -787,10 +786,18 @@ class ModelFactory:
 
 
     @Helper.try_catch
-    def create_TimeSeriesForecaster(self, dataset, name, target, target_name, freq='1T', seasonalities_choice=[], targets_to_enrich='', targets_history=[],
+    def create_TimeSeriesForecaster(self, dataset, name, target, freq='1T', seasonalities_choice=[], targets_to_enrich='', targets_history=[],
                                     n_lags_max=0, lags_to_include=[], one_hot_encode_seasons=False, remove_seasons =False, dropna=False,
-                                    scaler_target='', scaler_X_var='', grid_search=False, rolling_enrich_features=[], test_ratio=0.3, regressor={},
-                                    enable_custom_discretizations=True, nbMaxModality=50, nbMinObservation=10, replaceMissingValues='Median'):
+                                    scaler_target='', scaler_X_var='', grid_search=False, rolling_enrich_features=[], test_ratio=0.3, 
+                                    enable_custom_discretizations=True, nbMaxModality=50, nbMinObservation=10, replaceMissingValues='Median', 
+                                    regressor= { "model_name":"elasticNet",
+                                   "params": {"l1_ratio": [.1, .5, .7, .9, .95, .99, .995, 1],
+                                        "eps": 0.001, "n_alphas": 100, "fit_intercept": True,
+                                        "normalize": True, "precompute": 'auto', "max_iter": 2000,
+                                        "tol": 0.0001, "cv": 5, "copy_X": True, "verbose": 0,
+                                        "n_jobs": -1, "positive": False, "random_state": None, "selection": 'cyclic'}
+                                 }
+                                 ):
         """
         Create a eXtreme Gradient Boosting (XGBoost) regressor
 
@@ -798,7 +805,6 @@ class ModelFactory:
             dataset (Dataset): Dataset the model is fitted on
             name (str): Name of the new model
             target (Target): Target used to generate the model
-            target_name (str): Name of the target
             freq (str): Frequency of the time series
             seasonalities_choice (list): possible seasonalities to consider
             targets_history (list): variables to consider when adding lags
@@ -816,6 +822,7 @@ class ModelFactory:
 
             example:
 
+                Three possible algorithms [ XGBOOST, LSTM and ElaticNet]
                 "regressor":{
                     "model_name":"lstm", "params":{"n_units": 100, "activation": "tanh",
                     "dropout": 0.4, "return_sequences": true,
@@ -825,6 +832,48 @@ class ModelFactory:
                     "epochs": 100, "batch_size": 128, "validation_split": 0.3,
                     "shuffle": false, "verbose": 0}
                                     }
+
+                    "elasticNet_params" : { "model_name":"elasticNet",
+                                   "params": {"l1_ratio": [.1, .5, .7, .9, .95, .99, .995, 1],
+                                        "eps": 0.001, "n_alphas": 100, "fit_intercept": True,
+                                        "normalize": True, "precompute": 'auto', "max_iter": 2000,
+                                        "tol": 0.0001, "cv": 5, "copy_X": True, "verbose": 0,
+                                        "n_jobs": -1, "positive": False, "random_state": None, "selection": 'cyclic'}
+                                 }
+
+
+                    "xgboost_params" ={'target_name': target_name,
+                     'freq':freq, 
+                     'seasonalities_choice':seasons_choice,
+                     'targets_to_enrich': targets_in, 
+                     'targets_history': targets_history_in,
+                     'n_lags_max': n_lags_maxi,
+                     'lags_to_include':lags_to_include_in,  
+                     'one_hot_encode_seasons': one_hot_encode_seasons,
+                     'remove_seasons':remove_seasons,
+                     'dropna':dropna,
+                     'scaler_target':scaler_target,
+                     'scaler_X_var':scaler_X_var,
+                     
+                     'rolling_enrich_features':rolling_enrich_features,
+                    
+                    'grid_search':grid_search,
+                    "regressor": { "model_name":"xgboost",
+                                   "params": {
+                                        "xgb_model_params":{
+                                            "n_estimators": 200,
+                                            "max_depth": 3,
+                                            "learning_rate": 0.05},
+                                       "grid_params":{
+                                            "max_depth": [3, 5, 7],
+                                            "n_estimators": [100, 150, 200],
+                                            "learning_rate": [0.1, 0.05, 0.01, 0.2]
+                                               }
+                                             }
+                                 }
+                    }
+
+
 
             enable_custom_discretizations (boolean): when ticked use the custom discretization(s) link to the selected dataset. Default is True
             nbMaxModality (int): Maximum number of modalities per variable. Default is 50
@@ -836,16 +885,10 @@ class ModelFactory:
         """
         # case empty regressor entry
         if regressor == {}:
-            regressor = {
-                    "model_name":"lstm", "params":{"n_units": 100, "activation": "tanh",
-                    "dropout": 0.4, "return_sequences": True,
-                    "loss": "mae", "metrics": "mse", "optimizer_name": "sgd",
-                    "optimizer_params": {"lr": 0.01, "decay": 1e-6, "momentum": 0.9, "nesterov": True},
-                    "callbacks": {"monitor": "val_loss", "mode": "min", "patience": 5},
-                    "epochs": 100, "batch_size": 128, "validation_split": 0.3,
-                    "shuffle": False, "verbose": 0}
-                    }
+            import logging
+            return logging.info('Give a valid regresso choice')
 
+        target_name = target.name
         hyperParameters = { 
                 "target_name": target_name,
                 "freq": freq,
@@ -872,49 +915,12 @@ class ModelFactory:
             'nbMinObservation': nbMinObservation,
             'replaceMissingValues': replaceMissingValues,
             'paramsSk': dumps(hyperParameters),
-            'algoType': AlgoTypes.XGBREGRESSOR,
+            'algoType': AlgoTypes.TIMESERIESFORECASTER,
             'modelName': name,
             'enable_custom_discretizations': enable_custom_discretizations,
             'discretizations': discretizations,
         }
         return self.__create_skModel(dataset, target, params)
-
-    @Helper.try_catch
-    def create_XGB_time_series_forecaster(self, dataset, name, target, n_estimators=100, maxdepth=3, split_ratio=0.7, enable_custom_discretizations=True,
-                            nbMaxModality=50, nbMinObservation=10, replaceMissingValues='Median'):
-
-        """
-        Create a eXtreme Gradient Boosting (XGBoost) regressor
-
-        Args:
-            dataset (Dataset): Dataset the model is fitted on
-            name (str): Name of the new model
-            target (Target): Target used to generate the model
-            n_estimators (int): The number  of boosting stages to perform. Default is 100
-            max_depth (int): The maximum depth of the individual regression estimators. Default is 3
-            split_ratio (float): the first step in the model generation is the random split of the original dataset into a learning (or train) dataset
-                representing by default 70% of the original dataset, and a validation (or test) dataset containing the remaining 30%. Default is 0.7
-            enable_custom_discretizations (boolean): when ticked use the custom discretization(s) link to the selected dataset. Default is True
-            nbMaxModality (int): Maximum number of modalities per variable. Default is 50
-            nbMinObservation (int): Modalities with a number of observations lower will be ignored. Default is 10
-        Returns:
-            the created model
-        """
-        hyperParameters = {'n_estimators': n_estimators, 'learning_rate': 0.1, 'max_depth': maxdepth}
-        discretizations = {}
-        if enable_custom_discretizations is True:
-            discretizations = dataset._discretizations
-        params = {
-            'nbMaxModality': nbMaxModality,
-            'nbMinObservation': nbMinObservation,
-            'replaceMissingValues': replaceMissingValues,
-            'paramsSk': dumps(hyperParameters),
-            'algoType': AlgoTypes.FORECASTXGBREGRESSOR,
-            'modelName': name,
-            'enable_custom_discretizations': enable_custom_discretizations,
-            'discretizations': discretizations,
-        }
-        return self.__create_skModel(dataset, target, params) 
 
 
 class Model(Base):
