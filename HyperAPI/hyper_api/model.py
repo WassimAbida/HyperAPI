@@ -19,7 +19,7 @@ class AlgoTypes:
     XGBREGRESSOR = 'XGBRegressor'
     LASSO = 'Lasso'
     PERCEPTRON = 'Perceptron'
-    TIMESERIESFORECASTER= 'GradientBoostingRegressor' # TimeSeriesForecaster
+    TIMESERIESFORECASTER= 'TimeSeriesForecaster' 
 
     LIST = [HYPERCUBE, LOGISTICREGRESSION, DECISIONTREE, RANDOMFOREST,
             GRADIENTBOOSTING, GRADIENTBOOSTINGREGRESSOR, XGBREGRESSOR,
@@ -457,7 +457,7 @@ class ModelFactory:
         try:
             self.__api.handle_work_states(dataset.project_id, work_type=json_returned.get('type'), work_id=json_returned.get('_id'))
         except Exception as E:
-            raise ApiException('Unable to create the model ' + params.modelName, str(E))
+            raise ApiException('Unable to create the model ' + params.get('modelName'), str(E))
 
         if params['algoType'] in AlgoTypes.REGRESSORLIST:
             return RegressorModel(self.__api, json_returned)
@@ -787,7 +787,7 @@ class ModelFactory:
 
     @Helper.try_catch
     def create_TimeSeriesForecaster(self, dataset, name, target, freq='1T', seasonalities_choice=[], targets_to_enrich='', targets_history=[],
-                                    n_lags_max=0, lags_to_include=[], one_hot_encode_seasons=False, remove_seasons =False, dropna=False,
+                                    n_lags_max="", lags_to_include=[], one_hot_encode_seasons=False, remove_seasons =False, dropna=False,
                                     scaler_target='', scaler_X_var='', grid_search=False, rolling_enrich_features=[], test_ratio=0.3, 
                                     enable_custom_discretizations=True, nbMaxModality=50, nbMinObservation=10, replaceMissingValues='Median', 
                                     regressor= { "model_name":"elasticNet",
@@ -796,10 +796,9 @@ class ModelFactory:
                                         "normalize": True, "precompute": 'auto', "max_iter": 2000,
                                         "tol": 0.0001, "cv": 5, "copy_X": True, "verbose": 0,
                                         "n_jobs": -1, "positive": False, "random_state": None, "selection": 'cyclic'}
-                                 }
-                                 ):
+                                 }, deseason_signal=False, detrend_signal=False):
         """
-        Create a eXtreme Gradient Boosting (XGBoost) regressor
+        Create a Time Series forecasting model based on regressor
 
         Args:
             dataset (Dataset): Dataset the model is fitted on
@@ -819,7 +818,8 @@ class ModelFactory:
             rolling_enrich_features (list): features to include additional rolling statistics
             test_ratio (float): test size 
             regressor (dict): defines the regressor algorithm to use and its hyperparameters
-
+            deseason_signal (bool)
+            detrend_signal (bool)
             example:
 
                 Three possible algorithms [ XGBOOST, LSTM and ElaticNet]
@@ -884,11 +884,14 @@ class ModelFactory:
             the created model
         """
         # case empty regressor entry
-        if regressor == {}:
-            import logging
-            return logging.info('Give a valid regresso choice')
-
+        try: 
+            assert(len(regressor)!=0)
+        except Exception as E:
+            print('You have inserted an empty Regressor choice')
+            return E
+        
         target_name = target.name
+        targets_history.append(target_name)
         hyperParameters = { 
                 "target_name": target_name,
                 "freq": freq,
@@ -905,7 +908,9 @@ class ModelFactory:
                 "grid_search": grid_search,
                 "rolling_enrich_features": rolling_enrich_features,
                 "test_ratio": test_ratio,
-                "regressor": regressor
+                "regressor": regressor,
+                "deseason_signal": deseason_signal,
+                "detrend_signal": detrend_signal
          }
         discretizations = {}
         if enable_custom_discretizations is True:
